@@ -103,6 +103,29 @@ if [ -n "${STUB_URL}" ]; then
     && mv "${SERVERS_FILE}.tmp" "${SERVERS_FILE}"
 fi
 
+# Public URL discovery (publish-gateway-url-discovery extension): the binary
+# derives every /.well-known/oauth-* metadata base from the port configured in
+# servers.json (gateway_views.zig baseURL: "http://127.0.0.1:<port>" — no env
+# var, no Host header). NANOMCP_PUBLIC_PORT seeds that port so the metadata
+# advertises the URL published on the host. Empty = leave the configured port
+# alone (default 7331). Only touched when set and differing, so a port saved
+# through the GUI is never clobbered for no reason.
+PUBLIC_PORT="${NANOMCP_PUBLIC_PORT:-}"
+case "${PUBLIC_PORT}" in
+  ''|*[!0-9]*) PUBLIC_PORT="" ;;
+esac
+if [ -n "${PUBLIC_PORT}" ]; then
+  if [ ! -f "${SERVERS_FILE}" ]; then
+    printf '{"port":%s,"servers":[],"inbound":"off"}\n' "${PUBLIC_PORT}" > "${SERVERS_FILE}"
+  elif [ "$(jq -r '.port // 7331' "${SERVERS_FILE}")" != "${PUBLIC_PORT}" ]; then
+    jq --argjson p "${PUBLIC_PORT}" '.port = $p' "${SERVERS_FILE}" > "${SERVERS_FILE}.tmp" \
+      && mv "${SERVERS_FILE}.tmp" "${SERVERS_FILE}"
+  fi
+fi
+# The gateway serves on the port configured in servers.json (default 7331);
+# the relay below must forward to exactly that port.
+GW_PORT="$(jq -r '.port // 7331' "${SERVERS_FILE}" 2>/dev/null || echo 7331)"
+
 # The binary embeds a nanoui GUI: its startup brings GTK up unconditionally
 # (nanoui startGtk -> gtk.load/gtk_init_check), which needs a display even
 # though no window is ever shown here. Serve it a virtual X display. NANOUI_GTK=3
@@ -116,10 +139,11 @@ while [ ! -S /tmp/.X11-unix/X99 ] && [ "${i}" -lt 50 ]; do
   i=$((i + 1))
 done
 
-# The gateway binds 127.0.0.1:7331 (hardcoded upstream); expose it through a
-# socat relay on all interfaces so compose can publish one port.
+# The gateway binds 127.0.0.1:<configured port> (upstream hardcodes the
+# address, servers.json holds the port); expose it through a socat relay on
+# all interfaces so compose can publish one port.
 /usr/local/bin/nanomcp &
-exec socat TCP-LISTEN:7332,fork,reuseaddr TCP:127.0.0.1:7331
+exec socat TCP-LISTEN:7332,fork,reuseaddr TCP:127.0.0.1:"${GW_PORT}"
 SH
 chmod 0755 /usr/local/bin/nanomcp-entrypoint
 EOF

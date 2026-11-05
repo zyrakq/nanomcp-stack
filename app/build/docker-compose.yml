@@ -18,13 +18,19 @@ services:
       # MCP URL the gateway seeds the stub upstream with (inside
       # nanomcp-network). Set to empty to skip stub seeding.
       NANOMCP_SEED_STUB_URL: ${NANOMCP_SEED_STUB_URL:-http://stub-mcp-upstream:8080/mcp}
+      # Host-published gateway port. The entrypoint seeds it into
+      # servers.json .port — the only config surface the binary reads — so
+      # every /.well-known/oauth-* metadata document advertises
+      # http://127.0.0.1:<port> matching the host-published URL. Empty =
+      # inert (default port 7331). Must equal NANOMCP_PORT and differ from
+      # the relay listen port 7332.
+      NANOMCP_PUBLIC_PORT: ${NANOMCP_PUBLIC_PORT:-}
     volumes:
       - nanomcp-userdata:/home/nanomcp/.local/share/nanomcp/userdata
     healthcheck:
-      # /healthz needs the bearer in token mode; accept any HTTP answer
-      # (200 in off mode, 401 in token mode — no --fail). dash has no
-      # /dev/tcp, so a shell TCP probe would never work.
-      test: ["CMD-SHELL", "curl -s -o /dev/null -m 4 http://127.0.0.1:7331/healthz"]
+      # Scalar string (not an array): yq's *+ merge appends arrays, so only
+      # a scalar overrides the base test. Probes the configured port.
+      test: "curl -s -o /dev/null -m 4 http://127.0.0.1:${NANOMCP_PUBLIC_PORT:-7331}/healthz"
       interval: 10s
       timeout: 5s
       retries: 12
