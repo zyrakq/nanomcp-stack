@@ -76,7 +76,8 @@ OAuth 2.1 authorization server, and has no object-storage surface.
   - [`environments/`](components/environments/) — Environment-specific
     configurations (`forwarding`)
   - [`extensions/`](components/extensions/) — Extension components
-    (`stub-mcp-upstream`, `publish-gateway-url-discovery`)
+    (`stub-mcp-upstream`, `publish-gateway-url-discovery`,
+    `mcp-gateway-stdio`)
 - [`images/nanomcp/`](images/nanomcp/) — Source-built image (Dockerfile,
     empty build context)
 - [`build/`](build/) — Generated configurations (auto-generated, ready to
@@ -99,8 +100,16 @@ OAuth 2.1 authorization server, and has no object-storage surface.
   `NANOMCP_SEED_STUB_URL` so the functional gate can verify
   initialize → tools/list → tools/call end to end. Status per the extension
   catalog in [`DEPLOYMENT.md`](../DEPLOYMENT.md) (stack-conventions §20).
-- **mcp-gateway-stdio** (`available`): container-side stdio upstream helpers
-  for real stdio upstreams — recorded, NOT implemented.
+- **mcp-gateway-stdio** (`implemented`): stdio upstreams without a sidecar —
+  the image ships `mcp-stdio-echo` (minimal line-delimited JSON-RPC helper,
+  one `echo` tool) which the gateway spawns as a child process inside its own
+  container; the entrypoint seeds it into `servers.json` when
+  `NANOMCP_STDIO_HELPER=1`, and any jq-validated server object passed as
+  `NANOMCP_SEED_STDIO_JSON` is upserted the same way (transport `stdio`,
+  `command` required — resolved inside the gateway container via the child's
+  PATH, so the runtime a command needs must be in the image). Both inert when
+  unset. Status per the extension catalog in
+  [`DEPLOYMENT.md`](../DEPLOYMENT.md) (stack-conventions §20).
 - **publish-gateway-url-discovery** (`implemented`): seeds the gateway's
   configured port from `NANOMCP_PUBLIC_PORT` so the
   `/.well-known/oauth-protected-resource` metadata advertises the
@@ -136,6 +145,20 @@ OAuth 2.1 authorization server, and has no object-storage surface.
   advertises `http://127.0.0.1:<port>` matching the host URL. Must equal
   `NANOMCP_PORT` and differ from the relay listen port 7332 (e.g. both 7100).
   Empty = extension inert (default: empty)
+
+### MCP Gateway Stdio Configuration
+
+- `NANOMCP_STDIO_HELPER`: 1 = the entrypoint seeds a `servers.json` entry
+  (id `stdio-helper`, alias `stdio-helper`) whose command is the in-image
+  `mcp-stdio-echo` helper — a minimal MCP stdio server (one `echo` tool) the
+  gateway spawns as a child process inside its own container. Empty = not
+  seeded (default: 1)
+- `NANOMCP_SEED_STDIO_JSON`: a complete `servers.json` server object
+  (transport `stdio`; `command` required, resolved inside the gateway
+  container via the child's PATH; `args`/`env` optional), upserted by id at
+  container start. For real stdio upstreams beyond the built-in helper — the
+  runtime a command needs (node/python/...) must be present in the image.
+  Empty = not seeded (default: empty)
 
 ### Stub Upstream Configuration
 
