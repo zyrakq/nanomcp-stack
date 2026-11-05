@@ -1,0 +1,99 @@
+# DEPLOYMENT — nanomcp
+
+Upstream: https://github.com/sternelee/nanomcp (cloned and analyzed at commit `90cffaaec6ea17f55f7cb8c13871c3f8f03a88f0`, 2026-11-05).
+
+nanomcp is a Model Context Protocol gateway written in Zig (0.17): one binary that
+runs an HTTP gateway surface for MCP clients, proxies to upstream MCP servers
+(stdio / SSE / streamable-HTTP), acts as its own OAuth 2.1 authorization server
+for inbound auth, and ships a **native desktop GUI on nanoui** — not a web UI.
+
+## Product parts
+
+| part | purpose | image source |
+|------|---------|--------------|
+| `nanomcp` (gateway, single binary) | MCP gateway HTTP surface (`/mcp`, `/sse`, `/message`, `/healthz`) + inbound auth (`off`/`token`/`oauth` modes; gateway as OAuth 2.1 authserver) + upstream transports (stdio, SSE, streamable-HTTP) + registry/market client (`https://registry.modelcontextprotocol.io` `GET /v0/servers`) + credentials/token store | **source-built** (no published Docker image; `sternelee/nanomcp` → 404 on Docker Hub) per §19: `app/images/nanomcp/Dockerfile`, Zig 0.17, nanoui dep pinned `v0.12.0` in `build.zig.zon` |
+| nanoui GUI (inside the same binary) | native desktop window (1080×740), 5 pages: Servers / Market / Routes / Tools / Settings | not a separate part |
+
+Facts from source (grep-verified):
+- Serving auto-starts on launch: `state.App.init` (`src/state.zig`) calls `gw.startAsync(cfg.port)` — no saved serving flag.
+- `GET /healthz` → `{"status":"ok","tools":N}`.
+- Inbound modes (`config.zig` `InboundMode`): `.off`, `.token` (user-set bearer token), `.oauth` (bearer + gateway's own OAuth 2.1 AS: `/oauth/register`, `/oauth/authorize`, `/oauth/token`, `/oauth/callback`, `/.well-known/oauth-protected-resource[/path]`, `/.well-known/oauth-authorization-server`).
+- Bind: hardcoded `127.0.0.1` in `src/server.zig` (`net.Ip4Address.loopback(port)`); **no env var for bind or port** — port is changed in the Settings page (GUI) and persisted in `servers.json` (default `7331`, inbound `off`).
+- Only env var in source: `NANOMCP_TEST_DIR` (test-support). Headless/E2E nanoui helper flags: `--nanoui-screenshot`/`--nanoui-eval` (imply `--nanoui-hidden`) — nanoui harness flags, not deployment config.
+- Persistence: `$HOME/.local/share/nanomcp/userdata/` — `servers.json` (routes/port/inbound), `gateway-tokens.json`, per-server OAuth token files (`oauth-token/<id>`, mode 0600; dirs 0700).
+
+## Interaction map
+
+```
+MCP clients ──▶ nanomcp gateway (7331, MCP + OAuth endpoints only)
+nanomcp gateway ──▶ upstream MCP servers (stdio child procs / SSE / streamable-HTTP)
+nanoui GUI (native window, in-process) ──▶ same gateway state
+nanomcp gateway ──▶ registry.modelcontextprotocol.io (outbound https, market page)
+```
+
+- Without the gateway there is nothing: it is the whole product.
+- The GUI is **not served over HTTP**: `gateway_http.zig` dispatches only MCP and
+  OAuth endpoints; the window is a nanoui native process (`main.zig`). An MCP
+  client reaches everything the network surface offers; GUI-only operations
+  (adding servers via Market, Settings port change) are window-bound.
+- Absent parts: nothing breaks — single part, no infra peers.
+
+## Functional base
+
+| group | tier | parts | justification |
+|-------|------|-------|---------------|
+| core | core | `nanomcp` gateway (1 compose service, 1 binary) | The gateway IS the product; its core value (proxy MCP clients to upstream MCP servers) is exercised end-to-end by one service. Overreach guard: single-part product stays single-part. |
+
+**Mandatory infra — attempted and REFUSED (recorded per §20, never silently dropped):**
+
+| item | verdict | reason |
+|------|---------|--------|
+| database (postgresql + pgrust, §8) | REFUSED | Product mandates none: state is file-based (`servers.json`, `gateway-tokens.json`, credential files 0600/0700 under `userdata/`); no DB code in `src/`. |
+| OIDC (kanidm, §10) | REFUSED | Product mandates none as external infra: the gateway itself implements the OAuth 2.1 authorization server for inbound auth (`/oauth/*`); no external IdP integration found in source. |
+| S3 (s3-storage, §11) | REFUSED | No object-storage code or config surface in source; file-based persistence only. |
+
+**Links requiring `step-ca-trust` (§14):** none. Single group, no inter-group
+http-by-domain calls. Upstream MCP servers are third-party resources, not groups
+of this product. (Publishing the gateway itself behind the SSL stack is an
+environment-overlay concern, not a cross-group link.)
+
+**Base stage plan:**
+
+- **Stage A (core)** — scaffold `app/` with the source-built `nanomcp` service
+  (`${IMAGE:-localhost/nanomcp:<tag>}` per §19), named volume `nanomcp-data`
+  over the `userdata/` path, network `nanomcp-network`, `forwarding`
+  environment. Run the functional gate scenario below.
+- No outer stages: no other groups exist.
+
+**Functional gate scenario (Stage A browser/HTTP gate):**
+
+1. Container starts headless; serving auto-starts (no display needed — verify
+   the hypothesis in §6 with the `--nanoui-hidden` path).
+2. `GET /healthz` returns `{"status":"ok","tools":0}`.
+3. Bring up the gate-enabling `stub-mcp-upstream` extension (a minimal upstream
+   MCP server, stdio via the gateway's child-process transport with a helper
+   container) and register it through the persisted `servers.json` inside
+   `nanomcp-data` (no GUI in the container).
+4. `GET /healthz` reports `tools: 1`; an MCP client connects to `/mcp`
+   (inbound `token` mode, bearer from `gateway-tokens.json`) and successfully
+   calls the stub's tool through the gateway.
+
+## Extension catalog
+
+| extension | type | status | dependencies |
+|-----------|------|--------|--------------|
+| `stub-mcp-upstream` | product (gate companion) | `required-for-gate` — implement BEFORE Stage A gate | none; minimal upstream MCP server the gate proxies through (stdio helper container) |
+| `mcp-gateway-stdio` | product | `available` | container-side stdio upstream helpers (`sleep`-based child-process image shape); needed by any stdio upstream beyond the stub |
+| `publish-gateway-url-discovery` | product | `available` | `/.well-known/oauth-protected-resource` discovery for a publicly published gateway URL; depends on an SSL-stack environment (`letsencrypt`/`step-ca`) |
+
+Statuses: `available` = recorded, NOT implemented without explicit user
+confirmation at the extension-menu checkpoint (§20); `required-for-gate` =
+implemented before the core gate, no confirmation needed.
+
+## Open hypotheses
+
+| hypothesis | confidence | what the functional gate must observe |
+|------------|------------|----------------------------------------|
+| The gateway binary runs headless in a container: serving autostarts (`gw.startAsync`) without any window/display; nanoui init can be skipped or hidden via `--nanoui-hidden`-semantics flags | medium | container boots → `/healthz` answers without a display; crash or hang refutes → headless entrypoint/patch needed |
+| stdio upstream transport works in-container: child processes inherit PATH/HOME (`gw.environ = proc.environ_map`), so a `sleep`-based helper image or in-image binary can serve as an upstream | medium | stub upstream registers and its tool call succeeds through `/mcp` |
+| routes/upstream config can be pre-seeded by writing `servers.json` in the `nanomcp-data` volume (no GUI interaction) | medium | gateway adopts the pre-seeded upstream (healthz `tools: 1`) without GUI edits |
