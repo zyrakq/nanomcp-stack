@@ -59,8 +59,9 @@ The product's functional base per [`DEPLOYMENT.md`](../DEPLOYMENT.md)
   (`off`/`token`/`oauth`), upstream transports, registry/market client, and
   credential store. Without it there is nothing. The nanoui desktop GUI is
   inside the same binary but is not served over HTTP; in a container the
-  gateway runs headless and all network functionality is reachable by MCP
-  clients.
+  gateway runs behind an Xvfb virtual display with the GTK3 runtime
+  (`NANOUI_GTK=3`, no real window is ever shown) and all network functionality
+  is reachable by MCP clients.
 
 Mandatory infra (database / OIDC / S3) was attempted and **refused** per
 [`DEPLOYMENT.md`](../DEPLOYMENT.md): the product is file-based

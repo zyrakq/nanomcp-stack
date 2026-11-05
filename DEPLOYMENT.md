@@ -67,8 +67,14 @@ environment-overlay concern, not a cross-group link.)
 
 **Functional gate scenario (Stage A browser/HTTP gate):**
 
-1. Container starts headless; serving auto-starts (no display needed — verify
-   the hypothesis in §6 with the `--nanoui-hidden` path).
+1. Container starts the gateway with a virtual display: the headless-boot
+   hypothesis (§ Open hypotheses) was **REFUTED** at the gate — nanoui's GUI
+   startup unconditionally brings GTK up (`startGtk` → `gtk.load()` dlopens
+   `libgtk-4.so.1`/`libgtk-3.so.0`; `gtk_init_check` requires a display), and
+   its headless modes (`--nanoui-snapshot`/`--nanoui-generate`) make `run()`
+   return immediately, so they cannot host the gateway. Fix shipped in the
+   image: runtime packages `xvfb libgtk-3-0`, entrypoint exports
+   `NANOUI_GTK=3` + `DISPLAY=:99` and starts `Xvfb :99` before the gateway.
 2. `GET /healthz` returns `{"status":"ok","tools":0}`.
 3. Bring up the gate-enabling `stub-mcp-upstream` extension (a minimal upstream
    MCP server) and register it through the persisted `servers.json` inside the
@@ -103,6 +109,6 @@ implemented before the core gate, no confirmation needed.
 
 | hypothesis | confidence | what the functional gate must observe |
 |------------|------------|----------------------------------------|
-| The gateway binary runs headless in a container: serving autostarts (`gw.startAsync`) without any window/display; nanoui init can be skipped or hidden via `--nanoui-hidden`-semantics flags | medium | container boots → `/healthz` answers without a display; crash or hang refutes → headless entrypoint/patch needed |
+| ~~The gateway binary runs headless in a container: serving autostarts (`gw.startAsync`) without any window/display; nanoui init can be skipped or hidden via `--nanoui-hidden`-semantics flags~~ **REFUTED (2026-11-05 gate)** | medium | nanoui GUI startup unconditionally brings GTK up (`startGtk` → `gtk.load()` dlopens libgtk-4/libgtk-3; `gtk_init_check` needs a display); headless modes (`--nanoui-snapshot`/`--nanoui-generate`) make `run()` return immediately → cannot host the gateway. Resolution: Xvfb virtual display + GTK3 runtime in the image (see gate step 1) |
 | stdio upstream transport works in-container: child processes inherit PATH/HOME (`gw.environ = proc.environ_map`), so a `sleep`-based helper image or in-image binary can serve as an upstream | medium | stub upstream registers and its tool call succeeds through `/mcp` |
 | routes/upstream config can be pre-seeded by writing `servers.json` in the `nanomcp-data` volume (no GUI interaction) | medium | gateway adopts the pre-seeded upstream (healthz `tools: 1`) without GUI edits |
