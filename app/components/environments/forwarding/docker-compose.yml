@@ -1,0 +1,6 @@
+services:
+  nanomcp:
+    ports:
+      # The container always listens on relay port 7332 (socat ->
+      # 127.0.0.1:7331); only the host side is configurable.
+      - "${NANOMCP_PORT:-7332}:7332"

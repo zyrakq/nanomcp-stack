@@ -1,0 +1,18 @@
+[paths]
+environments_path = "./environments"
+extensions_dirs = ["extensions"]
+
+[build]
+skip_base_generation = true
+extensions = ["stub-mcp-upstream"]
+
+[build.combos]
+# entire = the functional base: gateway + the stub upstream the gate needs.
+entire = ["stub-mcp-upstream"]
+
+[build.environments]
+available = ["forwarding"]
+
+[build.environments.forwarding]
+extensions = []
+combos = ["entire"]

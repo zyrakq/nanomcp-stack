@@ -60,7 +60,7 @@ environment-overlay concern, not a cross-group link.)
 **Base stage plan:**
 
 - **Stage A (core)** — scaffold `app/` with the source-built `nanomcp` service
-  (`${IMAGE:-localhost/nanomcp:<tag>}` per §19), named volume `nanomcp-data`
+  (`${IMAGE:-localhost/nanomcp:<tag>}` per §19), named volume `nanomcp-userdata`
   over the `userdata/` path, network `nanomcp-network`, `forwarding`
   environment. Run the functional gate scenario below.
 - No outer stages: no other groups exist.
@@ -71,18 +71,27 @@ environment-overlay concern, not a cross-group link.)
    the hypothesis in §6 with the `--nanoui-hidden` path).
 2. `GET /healthz` returns `{"status":"ok","tools":0}`.
 3. Bring up the gate-enabling `stub-mcp-upstream` extension (a minimal upstream
-   MCP server, stdio via the gateway's child-process transport with a helper
-   container) and register it through the persisted `servers.json` inside
-   `nanomcp-data` (no GUI in the container).
+   MCP server) and register it through the persisted `servers.json` inside the
+   userdata volume (no GUI in the container).
+   **DEVIATION (recorded 2026-11-05):** the stub is a **streamable-HTTP**
+   upstream (`http://stub-mcp-upstream:8080/mcp`, python:3-alpine inline
+   `command`), not the stdio-helper-container shape originally sketched here.
+   Reasons: the gateway's stdio transport spawns child processes *inside the
+   gateway container* (PATH/HOME inherited), so a separate helper container
+   cannot be the stdio child without extra plumbing; a streamable-HTTP stub
+   exercises the same gateway path (register → aggregate → proxy tool call)
+   with a plain HTTP upstream. stdio remains available via the
+   `mcp-gateway-stdio` extension idea for real stdio upstreams.
 4. `GET /healthz` reports `tools: 1`; an MCP client connects to `/mcp`
-   (inbound `token` mode, bearer from `gateway-tokens.json`) and successfully
-   calls the stub's tool through the gateway.
+   (inbound `token` mode, bearer = the seeded inbound token from
+   `credentials/inbound-token.json`) and successfully calls the stub's tool
+   through the gateway.
 
 ## Extension catalog
 
 | extension | type | status | dependencies |
 |-----------|------|--------|--------------|
-| `stub-mcp-upstream` | product (gate companion) | `required-for-gate` — implement BEFORE Stage A gate | none; minimal upstream MCP server the gate proxies through (stdio helper container) |
+| `stub-mcp-upstream` | product (gate companion) | `required-for-gate` — implement BEFORE Stage A gate | none; minimal **streamable-HTTP** upstream MCP server (python:3-alpine, inline `command`) the gate proxies through — see the DEVIATION note in the gate scenario (stdio-helper shape replaced) |
 | `mcp-gateway-stdio` | product | `available` | container-side stdio upstream helpers (`sleep`-based child-process image shape); needed by any stdio upstream beyond the stub |
 | `publish-gateway-url-discovery` | product | `available` | `/.well-known/oauth-protected-resource` discovery for a publicly published gateway URL; depends on an SSL-stack environment (`letsencrypt`/`step-ca`) |
 

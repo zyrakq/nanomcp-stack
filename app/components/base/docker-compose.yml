@@ -1,0 +1,40 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: ${LOG_MAX_SIZE:-10m}
+    max-file: ${LOG_MAX_FILE:-3}
+    compress: ${LOG_COMPRESS:-true}
+
+services:
+  nanomcp:
+    container_name: nanomcp
+    image: ${IMAGE:-localhost/nanomcp:0.1.0}
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      # Inbound token callers must present (inbound=token mode); seeded into
+      # the credential store at container start. Empty = inbound stays off.
+      NANOMCP_SEED_INBOUND_TOKEN: ${NANOMCP_SEED_INBOUND_TOKEN:-}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - nanomcp-userdata:/home/nanomcp/.local/share/nanomcp/userdata
+    healthcheck:
+      # /healthz needs the bearer in token mode; accept any HTTP answer
+      # (200 in off mode, 401 in token mode — no --fail). dash has no
+      # /dev/tcp, so a shell TCP probe would never work.
+      test: ["CMD-SHELL", "curl -s -o /dev/null -m 4 http://127.0.0.1:7331/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - nanomcp-network
+
+networks:
+  nanomcp-network:
+    name: nanomcp-network
+    driver: bridge
+
+volumes:
+  nanomcp-userdata:
+    name: nanomcp-userdata
