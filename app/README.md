@@ -162,9 +162,9 @@ OAuth 2.1 authorization server, and has no object-storage surface.
 
 - `GET /healthz` returns 401: inbound `token` mode is active — send
   `Authorization: Bearer <NANOMCP_SEED_INBOUND_TOKEN>`.
-- Container unhealthy: the healthcheck is a TCP connect to 127.0.0.1:7331
-  (works in every auth mode); check `docker logs nanomcp` for gateway
-  startup errors.
+- Container unhealthy: the healthcheck curls `http://127.0.0.1:7331/healthz`
+  (accepts 200 in off mode and 401 in token mode); check `docker logs
+  nanomcp` for gateway startup errors.
 - Stub tool missing (`tools: 0`): check that `NANOMCP_SEED_STUB_URL` is set
   and the stub container is healthy; seeding only happens at container
   start.
