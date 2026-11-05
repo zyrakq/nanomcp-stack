@@ -76,7 +76,7 @@ OAuth 2.1 authorization server, and has no object-storage surface.
   - [`environments/`](components/environments/) — Environment-specific
     configurations (`forwarding`)
   - [`extensions/`](components/extensions/) — Extension components
-    (`stub-mcp-upstream`)
+    (`stub-mcp-upstream`, `publish-gateway-url-discovery`)
 - [`images/nanomcp/`](images/nanomcp/) — Source-built image (Dockerfile,
     empty build context)
 - [`build/`](build/) — Generated configurations (auto-generated, ready to
@@ -101,10 +101,13 @@ OAuth 2.1 authorization server, and has no object-storage surface.
   catalog in [`DEPLOYMENT.md`](../DEPLOYMENT.md) (stack-conventions §20).
 - **mcp-gateway-stdio** (`available`): container-side stdio upstream helpers
   for real stdio upstreams — recorded, NOT implemented.
-- **publish-gateway-url-discovery** (`available`):
-  `/.well-known/oauth-protected-resource` discovery for a publicly published
-  gateway URL; depends on an SSL-stack environment — recorded, NOT
-  implemented.
+- **publish-gateway-url-discovery** (`implemented`): seeds the gateway's
+  configured port from `NANOMCP_PUBLIC_PORT` so the
+  `/.well-known/oauth-protected-resource` metadata advertises the
+  host-published URL (`http://127.0.0.1:<port>` — upstream hardcodes the
+  base to the configured port, no Host header). Inert when the env is
+  empty. Status per the extension catalog in
+  [`DEPLOYMENT.md`](../DEPLOYMENT.md) (stack-conventions §20).
 
 ## 🔧 Environment Variables
 
@@ -125,6 +128,14 @@ OAuth 2.1 authorization server, and has no object-storage surface.
 
 - `NANOMCP_PORT`: Host-side published port (default: 7332; the container
   always listens on relay port 7332)
+
+### Publish Gateway URL Discovery Configuration
+
+- `NANOMCP_PUBLIC_PORT`: Host-published gateway port; the entrypoint seeds it
+  into `servers.json` `.port` so the `/.well-known/oauth-*` metadata
+  advertises `http://127.0.0.1:<port>` matching the host URL. Must equal
+  `NANOMCP_PORT` and differ from the relay listen port 7332 (e.g. both 7100).
+  Empty = extension inert (default: empty)
 
 ### Stub Upstream Configuration
 
@@ -181,9 +192,11 @@ OAuth 2.1 authorization server, and has no object-storage surface.
   `.env.example` (this stackbuilder version emits one `build/` directory, no
   per-env subdirs)
 - Use `sb build` to regenerate the configuration after modifying components
-- The gateway binds `127.0.0.1:7331` (hardcoded upstream, no env var); the
-  entrypoint runs a socat relay `0.0.0.0:7332 → 127.0.0.1:7331` and compose
+- The gateway binds `127.0.0.1:<configured port>` (upstream hardcodes the
+  address; `servers.json` holds the port, default 7331); the entrypoint runs
+  a socat relay `0.0.0.0:7332 → 127.0.0.1:<configured port>` and compose
   publishes only the relay port
-- Seeding (`NANOMCP_SEED_INBOUND_TOKEN`, `NANOMCP_SEED_STUB_URL`) never
-  clobbers GUI-managed state: the token file is rewritten only when it
-  differs, and `servers.json` entries other than the stub are left untouched
+- Seeding (`NANOMCP_SEED_INBOUND_TOKEN`, `NANOMCP_SEED_STUB_URL`,
+  `NANOMCP_PUBLIC_PORT`) never clobbers GUI-managed state: the token file is
+  rewritten only when it differs, and `servers.json` entries other than the
+  stub and the port are left untouched

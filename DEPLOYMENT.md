@@ -99,7 +99,7 @@ environment-overlay concern, not a cross-group link.)
 |-----------|------|--------|--------------|
 | `stub-mcp-upstream` | product (gate companion) | `required-for-gate` — implement BEFORE Stage A gate | none; minimal **streamable-HTTP** upstream MCP server (python:3-alpine, inline `command`) the gate proxies through — see the DEVIATION note in the gate scenario (stdio-helper shape replaced) |
 | `mcp-gateway-stdio` | product | `available` | container-side stdio upstream helpers (`sleep`-based child-process image shape); needed by any stdio upstream beyond the stub |
-| `publish-gateway-url-discovery` | product | `available` | `/.well-known/oauth-protected-resource` discovery for a publicly published gateway URL; depends on an SSL-stack environment (`letsencrypt`/`step-ca`) |
+| `publish-gateway-url-discovery` | product | `implemented` | `/.well-known/oauth-protected-resource` discovery for a host-published gateway URL: `NANOMCP_PUBLIC_PORT` seeds `servers.json` `.port` (the only config surface the binary reads — metadata base is hardcoded `http://127.0.0.1:<port>`, no env var, no Host header) so the metadata advertises the published URL when `NANOMCP_PORT` == `NANOMCP_PUBLIC_PORT`. Upstream limitation: hostname-based SSL publishing is impossible (base is always `http://127.0.0.1:<port>`); `NANOMCP_PUBLIC_PORT` must differ from the relay listen port 7332. Inert when unset |
 
 Statuses: `available` = recorded, NOT implemented without explicit user
 confirmation at the extension-menu checkpoint (§20); `required-for-gate` =
