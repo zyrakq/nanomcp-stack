@@ -113,7 +113,8 @@ OAuth 2.1 authorization server, and has no object-storage surface.
 - `IMAGE`: Docker image (default: localhost/nanomcp:0.1.0)
 - `NANOMCP_SEED_INBOUND_TOKEN`: Bearer token callers must present (inbound
   `token` mode); seeded into the credential store at container start as a
-  raw-text file. Empty = inbound stays `off` (default: empty)
+  flat 0600 file (`userdata/inbound-token.json`). Empty = inbound stays
+  `off` (default: empty)
 - `LOG_MAX_SIZE`: Log rotation size (default: 10m)
 - `LOG_MAX_FILE`: Log rotation file count (default: 3)
 - `LOG_COMPRESS`: Compress rotated logs (default: true)

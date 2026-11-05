@@ -84,7 +84,7 @@ environment-overlay concern, not a cross-group link.)
    `mcp-gateway-stdio` extension idea for real stdio upstreams.
 4. `GET /healthz` reports `tools: 1`; an MCP client connects to `/mcp`
    (inbound `token` mode, bearer = the seeded inbound token from
-   `credentials/inbound-token.json`) and successfully calls the stub's tool
+   `userdata/inbound-token.json`) and successfully calls the stub's tool
    through the gateway.
 
 ## Extension catalog

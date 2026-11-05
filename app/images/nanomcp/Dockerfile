@@ -64,15 +64,15 @@ cat > /usr/local/bin/nanomcp-entrypoint <<'SH'
 set -eu
 
 DATA_DIR="${HOME}/.local/share/nanomcp/userdata"
-CRED_DIR="${DATA_DIR}/credentials"
-TOKEN_FILE="${CRED_DIR}/inbound-token.json"
+TOKEN_FILE="${DATA_DIR}/inbound-token.json"
 SERVERS_FILE="${DATA_DIR}/servers.json"
 TOKEN="${NANOMCP_SEED_INBOUND_TOKEN:-}"
 STUB_URL="${NANOMCP_SEED_STUB_URL:-}"
 
-mkdir -p "${CRED_DIR}"
+mkdir -p "${DATA_DIR}"
 
-# Inbound token: the credential store keeps it as a raw-text file (0600).
+# Inbound token: the credential store keeps it as a flat file next to
+# servers.json (credentials.zig pathOf: <userdata>/inbound-token.json, 0600).
 # Seeded only when the env var is set and differs from what is on disk, so a
 # token set through the GUI is never clobbered for no reason.
 if [ -n "${TOKEN}" ]; then
