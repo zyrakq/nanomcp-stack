@@ -57,6 +57,45 @@ COPY --from=build /build/src/zig-out/bin/nanomcp /usr/local/bin/nanomcp
 RUN mkdir -p /home/nanomcp/.local/share/nanomcp/userdata \
     && chown -R nanomcp:nanomcp /home/nanomcp
 
+# mcp-gateway-stdio extension helper: a minimal MCP stdio upstream (echo
+# tool) speaking line-delimited JSON-RPC on its standard streams — exactly
+# what the gateway's stdio transport (transport_stdio.zig) spawns and pipes.
+# Doubles as a template for real stdio servers; needs only jq (installed
+# above). Written inline (empty build context — nothing is COPYed).
+RUN <<'EOF'
+cat > /usr/local/bin/mcp-stdio-echo <<'SH'
+#!/bin/sh
+# Minimal MCP stdio upstream: one JSON-RPC message per line, echo tool.
+while IFS= read -r line; do
+  [ -n "${line}" ] || continue
+  resp="$(printf '%s' "${line}" | jq -c '
+    .method as $m
+    | if $m == null or ($m | startswith("notifications/")) then empty
+      elif $m == "initialize" then
+        {jsonrpc: "2.0", id: .id,
+         result: {protocolVersion: "2025-06-18", capabilities: {tools: {}},
+                  serverInfo: {name: "mcp-stdio-echo", version: "0.1.0"}}}
+      elif $m == "tools/list" then
+        {jsonrpc: "2.0", id: .id,
+         result: {tools: [{name: "echo",
+                           description: "Echo back the input text",
+                           inputSchema: {type: "object",
+                             properties: {text: {type: "string"}},
+                             required: ["text"]}}]}}
+      elif $m == "tools/call" then
+        {jsonrpc: "2.0", id: .id,
+         result: {content: [{type: "text",
+                  text: ("echo: " + (.params.arguments.text // ""))}]}}
+      else
+        {jsonrpc: "2.0", id: .id,
+         error: {code: -32601, message: ("method not found: " + $m)}}
+      end')"
+  [ -n "${resp}" ] && printf '%s\n' "${resp}"
+done
+SH
+chmod 0755 /usr/local/bin/mcp-stdio-echo
+EOF
+
 # Entrypoint written inline (empty build context — nothing is COPYed).
 RUN <<'EOF'
 cat > /usr/local/bin/nanomcp-entrypoint <<'SH'
@@ -100,6 +139,48 @@ if [ -n "${STUB_URL}" ]; then
       then .
       elif ((env.NANOMCP_SEED_INBOUND_TOKEN // "") != "") then .inbound = "token"
       else . end' "${SERVERS_FILE}" > "${SERVERS_FILE}.tmp" \
+    && mv "${SERVERS_FILE}.tmp" "${SERVERS_FILE}"
+fi
+
+# Stdio helper upstream (mcp-gateway-stdio extension): create-or-upsert one
+# servers.json entry pointing at the in-image helper script. Only runs when
+# NANOMCP_STDIO_HELPER=1; every other entry (GUI-managed) is left untouched.
+# The gateway spawns stdio children inside its own container
+# (transport_stdio.zig), so the helper must live in the same image.
+if [ "${NANOMCP_STDIO_HELPER:-}" = "1" ]; then
+  if [ ! -f "${SERVERS_FILE}" ]; then
+    printf '{"port":7331,"servers":[],"inbound":"off"}\n' > "${SERVERS_FILE}"
+  fi
+  jq '
+    .servers = ((.servers // []) | map(select(.id != "stdio-helper"))
+      + [{"id":"stdio-helper","name":"Stdio Helper","alias":"stdio-helper",
+          "transport":"stdio","enabled":true,
+          "command":"/usr/local/bin/mcp-stdio-echo"}])' \
+    "${SERVERS_FILE}" > "${SERVERS_FILE}.tmp" \
+    && mv "${SERVERS_FILE}.tmp" "${SERVERS_FILE}"
+fi
+
+# mcp-gateway-stdio extension: seed one stdio upstream. NANOMCP_SEED_STDIO_JSON
+# holds a complete servers.json server object (transport "stdio"; command is
+# required and resolved inside this container via the child's PATH — the image
+# ships the mcp-stdio-echo helper above). Empty = no stdio seeding; every
+# other entry (GUI-managed) is left untouched. Upserted by id.
+STDIO_JSON="${NANOMCP_SEED_STDIO_JSON:-}"
+if [ -n "${STDIO_JSON}" ]; then
+  if ! printf '%s' "${STDIO_JSON}" | jq -e 'type == "object"
+      and (.id // "" | length > 0)
+      and (.name // "" | length > 0)
+      and (.alias // "" | length > 0)
+      and (.command // "" | length > 0)' > /dev/null; then
+    echo "nanomcp-entrypoint: invalid NANOMCP_SEED_STDIO_JSON" >&2
+    exit 1
+  fi
+  if [ ! -f "${SERVERS_FILE}" ]; then
+    printf '{"port":7331,"servers":[],"inbound":"off"}\n' > "${SERVERS_FILE}"
+  fi
+  jq --argjson srv "${STDIO_JSON}" '
+    .servers = ((.servers // []) | map(select(.id != $srv.id)) + [$srv])' \
+    "${SERVERS_FILE}" > "${SERVERS_FILE}.tmp" \
     && mv "${SERVERS_FILE}.tmp" "${SERVERS_FILE}"
 fi
 

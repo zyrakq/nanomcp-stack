@@ -25,6 +25,21 @@ services:
       # inert (default port 7331). Must equal NANOMCP_PORT and differ from
       # the relay listen port 7332.
       NANOMCP_PUBLIC_PORT: ${NANOMCP_PUBLIC_PORT:-}
+      # Built-in stdio helper upstream: 1 = the entrypoint seeds a
+      # servers.json entry (id "stdio-helper", alias "stdio-helper") whose
+      # command is the in-image mcp-stdio-echo helper — a minimal MCP stdio
+      # server (one echo tool) the gateway spawns as a child process inside
+      # its own container (transport_stdio.zig; a sidecar container cannot
+      # be the child). Empty = not seeded.
+      NANOMCP_STDIO_HELPER: ${NANOMCP_STDIO_HELPER:-1}
+      # Generic stdio upstream seeding: a complete servers.json server object
+      # (transport "stdio"; command required, resolved inside the gateway
+      # container via the child's PATH; args/env optional). For real stdio
+      # upstreams beyond the built-in helper — the runtime a command needs
+      # (node/python/...) must be present in the image. Empty = not seeded;
+      # GUI-managed entries are never touched. Example:
+      #   NANOMCP_SEED_STDIO_JSON={"id":"weather","name":"Weather","alias":"weather","transport":"stdio","enabled":true,"command":"uvx","args":["mcp-server-fetch"]}
+      NANOMCP_SEED_STDIO_JSON: ${NANOMCP_SEED_STDIO_JSON:-}
     volumes:
       - nanomcp-userdata:/home/nanomcp/.local/share/nanomcp/userdata
     healthcheck:
