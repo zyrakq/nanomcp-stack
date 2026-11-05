@@ -125,8 +125,8 @@ fi
 
 # Stub upstream: create-or-upsert one servers.json entry. Only runs when
 # NANOMCP_SEED_STUB_URL is set; every other entry (GUI-managed) is left
-# untouched. inbound flips to "token" only when a token is seeded and the
-# file does not already use oauth.
+# untouched. (The inbound "token" flip is a standalone step below, so it
+# applies no matter which seeding block created the file.)
 if [ -n "${STUB_URL}" ]; then
   if [ ! -f "${SERVERS_FILE}" ]; then
     printf '{"port":7331,"servers":[],"inbound":"off"}\n' > "${SERVERS_FILE}"
@@ -134,11 +134,8 @@ if [ -n "${STUB_URL}" ]; then
   jq --arg url "${STUB_URL}" '
     .servers = ((.servers // []) | map(select(.id != "stub-mcp-upstream"))
       + [{"id":"stub-mcp-upstream","name":"Stub MCP","alias":"stub",
-          "transport":"http","enabled":true,"url":$url}])
-    | if (.inbound // "off") == "oauth"
-      then .
-      elif ((env.NANOMCP_SEED_INBOUND_TOKEN // "") != "") then .inbound = "token"
-      else . end' "${SERVERS_FILE}" > "${SERVERS_FILE}.tmp" \
+          "transport":"http","enabled":true,"url":$url}])' \
+    "${SERVERS_FILE}" > "${SERVERS_FILE}.tmp" \
     && mv "${SERVERS_FILE}.tmp" "${SERVERS_FILE}"
 fi
 
@@ -180,6 +177,17 @@ if [ -n "${STDIO_JSON}" ]; then
   fi
   jq --argjson srv "${STDIO_JSON}" '
     .servers = ((.servers // []) | map(select(.id != $srv.id)) + [$srv])' \
+    "${SERVERS_FILE}" > "${SERVERS_FILE}.tmp" \
+    && mv "${SERVERS_FILE}.tmp" "${SERVERS_FILE}"
+fi
+
+# Inbound mode: flip servers.json .inbound to "token" when a token was
+# seeded (unless the file already uses oauth — GUI-managed). Standalone step
+# after all seeding blocks, so every path that creates servers.json fresh
+# (stub, stdio helper, generic JSON) ends in the right mode even when no
+# other block runs.
+if [ -f "${SERVERS_FILE}" ] && [ -n "${TOKEN}" ]; then
+  jq 'if (.inbound // "off") == "oauth" then . else .inbound = "token" end' \
     "${SERVERS_FILE}" > "${SERVERS_FILE}.tmp" \
     && mv "${SERVERS_FILE}.tmp" "${SERVERS_FILE}"
 fi
