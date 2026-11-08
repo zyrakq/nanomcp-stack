@@ -10,7 +10,7 @@ streamable-HTTP upstream for the functional gate.
 ### 🖥️ [nanomcp App](app/)
 
 The `nanomcp` gateway service (source-built Zig image, no published upstream
-image) with the `forwarding` environment and the `stub-mcp-upstream` gate
+image) with the `forwarding` environment and the `stub-upstream` gate
 companion; the gateway binds `127.0.0.1:7331` in-container and is exposed
 through a socat relay on port 7332.
 

@@ -1,0 +1,6 @@
+services:
+  nanomcp:
+    environment:
+      NANOMCP_PUBLIC_PORT: ${NANOMCP_PUBLIC_PORT:-}
+    healthcheck:
+      test: "curl -s -o /dev/null -m 4 http://127.0.0.1:${NANOMCP_PUBLIC_PORT:-7331}/healthz"

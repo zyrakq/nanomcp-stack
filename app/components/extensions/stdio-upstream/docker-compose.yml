@@ -1,0 +1,5 @@
+services:
+  nanomcp:
+    environment:
+      NANOMCP_STDIO_HELPER: ${NANOMCP_STDIO_HELPER:-1}
+      NANOMCP_SEED_STDIO_JSON: ${NANOMCP_SEED_STDIO_JSON:-}

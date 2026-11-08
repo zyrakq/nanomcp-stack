@@ -4,12 +4,10 @@ extensions_dirs = ["extensions"]
 
 [build]
 skip_base_generation = true
-extensions = ["stub-mcp-upstream", "publish-gateway-url-discovery", "mcp-gateway-stdio"]
+extensions = ["stub-upstream", "url-discovery", "stdio-upstream"]
 
 [build.combos]
-# entire = the functional base: gateway + the stub upstream the gate needs
-# + the two confirmed extensions.
-entire = ["stub-mcp-upstream", "publish-gateway-url-discovery", "mcp-gateway-stdio"]
+entire = ["stub-upstream", "url-discovery", "stdio-upstream"]
 
 [build.environments]
 available = ["forwarding"]

@@ -76,8 +76,8 @@ OAuth 2.1 authorization server, and has no object-storage surface.
   - [`environments/`](components/environments/) — Environment-specific
     configurations (`forwarding`)
   - [`extensions/`](components/extensions/) — Extension components
-    (`stub-mcp-upstream`, `publish-gateway-url-discovery`,
-    `mcp-gateway-stdio`)
+    (`stub-upstream`, `url-discovery`,
+    `stdio-upstream`)
 - [`images/nanomcp/`](images/nanomcp/) — Source-built image (Dockerfile,
     empty build context)
 - [`build/`](build/) — Generated configurations (auto-generated, ready to
@@ -94,13 +94,13 @@ OAuth 2.1 authorization server, and has no object-storage surface.
 
 ### Extensions
 
-- **stub-mcp-upstream** (`implemented`, `required-for-gate`): minimal
+- **stub-upstream** (`implemented`, `required-for-gate`): minimal
   streamable-HTTP MCP upstream (python:3-alpine, inline `command`) with one
   `echo` tool; the gateway seeds it into `servers.json` via
   `NANOMCP_SEED_STUB_URL` so the functional gate can verify
   initialize → tools/list → tools/call end to end. Status per the extension
   catalog in [`DEPLOYMENT.md`](../DEPLOYMENT.md) (stack-conventions §20).
-- **mcp-gateway-stdio** (`implemented`): stdio upstreams without a sidecar —
+- **stdio-upstream** (`implemented`): stdio upstreams without a sidecar —
   the image ships `mcp-stdio-echo` (minimal line-delimited JSON-RPC helper,
   one `echo` tool) which the gateway spawns as a child process inside its own
   container; the entrypoint seeds it into `servers.json` when
@@ -110,7 +110,7 @@ OAuth 2.1 authorization server, and has no object-storage surface.
   PATH, so the runtime a command needs must be in the image). Both inert when
   unset. Status per the extension catalog in
   [`DEPLOYMENT.md`](../DEPLOYMENT.md) (stack-conventions §20).
-- **publish-gateway-url-discovery** (`implemented`): seeds the gateway's
+- **url-discovery** (`implemented`): seeds the gateway's
   configured port from `NANOMCP_PUBLIC_PORT` so the
   `/.well-known/oauth-protected-resource` metadata advertises the
   host-published URL (`http://127.0.0.1:<port>` — upstream hardcodes the
@@ -182,7 +182,7 @@ OAuth 2.1 authorization server, and has no object-storage surface.
 - The inbound token is stored world-unreadable (0600) in the credential
   store inside the `nanomcp-userdata` volume.
 - For public deployments, put the gateway behind the collection's SSL stacks
-  and consider the `publish-gateway-url-discovery` extension (OAuth
+  and consider the `url-discovery` extension (OAuth
   protected-resource metadata).
 
 ## 🆘 Troubleshooting

@@ -4,13 +4,8 @@ services:
       stub-mcp-upstream:
         condition: service_healthy
     environment:
-      # MCP URL the gateway seeds the stub upstream with (inside
-      # nanomcp-network). Set to empty to skip stub seeding.
       NANOMCP_SEED_STUB_URL: ${NANOMCP_SEED_STUB_URL:-http://stub-mcp-upstream:8080/mcp}
 
-  # Minimal streamable-HTTP MCP upstream (required-for-gate): lets the
-  # gateway aggregate at least one real upstream so the functional gate can
-  # verify initialize -> tools/list -> tools/call end to end.
   stub-mcp-upstream:
     container_name: stub-mcp-upstream
     image: python:3-alpine

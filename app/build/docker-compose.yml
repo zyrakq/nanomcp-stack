@@ -11,40 +11,15 @@ services:
     restart: unless-stopped
     logging: *default-logging
     environment:
-      # Inbound token callers must present (inbound=token mode); seeded into
-      # the credential store at container start. Empty = inbound stays off.
       NANOMCP_SEED_INBOUND_TOKEN: ${NANOMCP_SEED_INBOUND_TOKEN:-}
       TZ: ${TZ:-UTC}
-      # MCP URL the gateway seeds the stub upstream with (inside
-      # nanomcp-network). Set to empty to skip stub seeding.
       NANOMCP_SEED_STUB_URL: ${NANOMCP_SEED_STUB_URL:-http://stub-mcp-upstream:8080/mcp}
-      # Host-published gateway port. The entrypoint seeds it into
-      # servers.json .port — the only config surface the binary reads — so
-      # every /.well-known/oauth-* metadata document advertises
-      # http://127.0.0.1:<port> matching the host-published URL. Empty =
-      # inert (default port 7331). Must equal NANOMCP_PORT and differ from
-      # the relay listen port 7332.
       NANOMCP_PUBLIC_PORT: ${NANOMCP_PUBLIC_PORT:-}
-      # Built-in stdio helper upstream: 1 = the entrypoint seeds a
-      # servers.json entry (id "stdio-helper", alias "stdio-helper") whose
-      # command is the in-image mcp-stdio-echo helper — a minimal MCP stdio
-      # server (one echo tool) the gateway spawns as a child process inside
-      # its own container (transport_stdio.zig; a sidecar container cannot
-      # be the child). Empty = not seeded.
       NANOMCP_STDIO_HELPER: ${NANOMCP_STDIO_HELPER:-1}
-      # Generic stdio upstream seeding: a complete servers.json server object
-      # (transport "stdio"; command required, resolved inside the gateway
-      # container via the child's PATH; args/env optional). For real stdio
-      # upstreams beyond the built-in helper — the runtime a command needs
-      # (node/python/...) must be present in the image. Empty = not seeded;
-      # GUI-managed entries are never touched. Example:
-      #   NANOMCP_SEED_STDIO_JSON={"id":"weather","name":"Weather","alias":"weather","transport":"stdio","enabled":true,"command":"uvx","args":["mcp-server-fetch"]}
       NANOMCP_SEED_STDIO_JSON: ${NANOMCP_SEED_STDIO_JSON:-}
     volumes:
       - nanomcp-userdata:/home/nanomcp/.local/share/nanomcp/userdata
     healthcheck:
-      # Scalar string (not an array): yq's *+ merge appends arrays, so only
-      # a scalar overrides the base test. Probes the configured port.
       test: "curl -s -o /dev/null -m 4 http://127.0.0.1:${NANOMCP_PUBLIC_PORT:-7331}/healthz"
       interval: 10s
       timeout: 5s
@@ -53,15 +28,10 @@ services:
     networks:
       - nanomcp-network
     ports:
-      # The container always listens on relay port 7332 (socat ->
-      # 127.0.0.1:7331); only the host side is configurable.
       - "${NANOMCP_PORT:-7332}:7332"
     depends_on:
       stub-mcp-upstream:
         condition: service_healthy
-  # Minimal streamable-HTTP MCP upstream (required-for-gate): lets the
-  # gateway aggregate at least one real upstream so the functional gate can
-  # verify initialize -> tools/list -> tools/call end to end.
   stub-mcp-upstream:
     container_name: stub-mcp-upstream
     image: python:3-alpine

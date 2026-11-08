@@ -76,7 +76,7 @@ environment-overlay concern, not a cross-group link.)
    image: runtime packages `xvfb libgtk-3-0`, entrypoint exports
    `NANOUI_GTK=3` + `DISPLAY=:99` and starts `Xvfb :99` before the gateway.
 2. `GET /healthz` returns `{"status":"ok","tools":0}`.
-3. Bring up the gate-enabling `stub-mcp-upstream` extension (a minimal upstream
+3. Bring up the gate-enabling `stub-upstream` extension (a minimal upstream
    MCP server) and register it through the persisted `servers.json` inside the
    userdata volume (no GUI in the container).
    **DEVIATION (recorded 2026-11-05):** the stub is a **streamable-HTTP**
@@ -87,7 +87,7 @@ environment-overlay concern, not a cross-group link.)
    cannot be the stdio child without extra plumbing; a streamable-HTTP stub
    exercises the same gateway path (register → aggregate → proxy tool call)
    with a plain HTTP upstream. stdio is now covered by the implemented
-   `mcp-gateway-stdio` extension (in-image `mcp-stdio-echo` helper + generic
+   `stdio-upstream` extension (in-image `mcp-stdio-echo` helper + generic
    `NANOMCP_SEED_STDIO_JSON` seeding) for real stdio upstreams.
 4. `GET /healthz` reports `tools: 1`; an MCP client connects to `/mcp`
    (inbound `token` mode, bearer = the seeded inbound token from
@@ -98,9 +98,9 @@ environment-overlay concern, not a cross-group link.)
 
 | extension | type | status | dependencies |
 |-----------|------|--------|--------------|
-| `stub-mcp-upstream` | product (gate companion) | `required-for-gate` — implement BEFORE Stage A gate | none; minimal **streamable-HTTP** upstream MCP server (python:3-alpine, inline `command`) the gate proxies through — see the DEVIATION note in the gate scenario (stdio-helper shape replaced) |
-| `mcp-gateway-stdio` | product | `implemented` | stdio upstreams without a sidecar: the image ships `mcp-stdio-echo` (minimal line-delimited JSON-RPC helper, one `echo` tool) and the entrypoint (a) seeds a `servers.json` entry for it when `NANOMCP_STDIO_HELPER=1`, (b) upserts any jq-validated server object passed as `NANOMCP_SEED_STDIO_JSON` (transport `stdio`, `command` required — resolved inside the gateway container via the child's PATH, so the runtime a command needs must be in the image). Both inert when unset |
-| `publish-gateway-url-discovery` | product | `implemented` | `/.well-known/oauth-protected-resource` discovery for a host-published gateway URL: `NANOMCP_PUBLIC_PORT` seeds `servers.json` `.port` (the only config surface the binary reads — metadata base is hardcoded `http://127.0.0.1:<port>`, no env var, no Host header) so the metadata advertises the published URL when `NANOMCP_PORT` == `NANOMCP_PUBLIC_PORT`. Upstream limitation: hostname-based SSL publishing is impossible (base is always `http://127.0.0.1:<port>`); `NANOMCP_PUBLIC_PORT` must differ from the relay listen port 7332. Inert when unset |
+| `stub-upstream` | product (gate companion) | `required-for-gate` — implement BEFORE Stage A gate | none; minimal **streamable-HTTP** upstream MCP server (python:3-alpine, inline `command`) the gate proxies through — see the DEVIATION note in the gate scenario (stdio-helper shape replaced) |
+| `stdio-upstream` | product | `implemented` | stdio upstreams without a sidecar: the image ships `mcp-stdio-echo` (minimal line-delimited JSON-RPC helper, one `echo` tool) and the entrypoint (a) seeds a `servers.json` entry for it when `NANOMCP_STDIO_HELPER=1`, (b) upserts any jq-validated server object passed as `NANOMCP_SEED_STDIO_JSON` (transport `stdio`, `command` required — resolved inside the gateway container via the child's PATH, so the runtime a command needs must be in the image). Both inert when unset |
+| `url-discovery` | product | `implemented` | `/.well-known/oauth-protected-resource` discovery for a host-published gateway URL: `NANOMCP_PUBLIC_PORT` seeds `servers.json` `.port` (the only config surface the binary reads — metadata base is hardcoded `http://127.0.0.1:<port>`, no env var, no Host header) so the metadata advertises the published URL when `NANOMCP_PORT` == `NANOMCP_PUBLIC_PORT`. Upstream limitation: hostname-based SSL publishing is impossible (base is always `http://127.0.0.1:<port>`); `NANOMCP_PUBLIC_PORT` must differ from the relay listen port 7332. Inert when unset |
 
 Statuses: `available` = recorded, NOT implemented without explicit user
 confirmation at the extension-menu checkpoint (§20); `required-for-gate` =
@@ -111,5 +111,5 @@ implemented before the core gate, no confirmation needed.
 | hypothesis | confidence | what the functional gate must observe |
 |------------|------------|----------------------------------------|
 | ~~The gateway binary runs headless in a container: serving autostarts (`gw.startAsync`) without any window/display; nanoui init can be skipped or hidden via `--nanoui-hidden`-semantics flags~~ **REFUTED (2026-11-05 gate)** | medium | nanoui GUI startup unconditionally brings GTK up (`startGtk` → `gtk.load()` dlopens libgtk-4/libgtk-3; `gtk_init_check` needs a display); headless modes (`--nanoui-snapshot`/`--nanoui-generate`) make `run()` return immediately → cannot host the gateway. Resolution: Xvfb virtual display + GTK3 runtime in the image (see gate step 1) |
-| stdio upstream transport works in-container: child processes inherit PATH/HOME (`gw.environ = proc.environ_map`), so an in-image binary can serve as an upstream ~~| medium | stub upstream registers and its tool call succeeds through `/mcp`~~ **CONFIRMED (2026-11-05 gate)**: the `mcp-gateway-stdio` extension's in-image `mcp-stdio-echo` helper registers via `servers.json` seeding and its tool answers through `/mcp` (`stdio_helper__echo` → `echo: gate-stdio`); tool names namespace under the server alias with `-` sanitized to `_`; inertness verified with a fresh volume (`tools: 1` when the flag is off) |
+| stdio upstream transport works in-container: child processes inherit PATH/HOME (`gw.environ = proc.environ_map`), so an in-image binary can serve as an upstream ~~| medium | stub upstream registers and its tool call succeeds through `/mcp`~~ **CONFIRMED (2026-11-05 gate)**: the `stdio-upstream` extension's in-image `mcp-stdio-echo` helper registers via `servers.json` seeding and its tool answers through `/mcp` (`stdio_helper__echo` → `echo: gate-stdio`); tool names namespace under the server alias with `-` sanitized to `_`; inertness verified with a fresh volume (`tools: 1` when the flag is off) |
 | routes/upstream config can be pre-seeded by writing `servers.json` in the `nanomcp-data` volume (no GUI interaction) | medium | gateway adopts the pre-seeded upstream (healthz `tools: 1`) without GUI edits |
